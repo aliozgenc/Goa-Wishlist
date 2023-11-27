@@ -13,6 +13,7 @@ In the future I'm planning to make these changes:
 - Add a share button so a visitor/user can share their wishlist to others through social media.
 - Will change some CSS for styling.
 - Make a proper file structure so the plugin will be more readable for developers.
+- Plugin will be able to remember for your wishlist forever (or till you delete them, lol) as soon as you become a registered customer.
 
 If you have other suggestions please let me know.
 
