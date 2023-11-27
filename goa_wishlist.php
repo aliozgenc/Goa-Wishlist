@@ -2,10 +2,9 @@
 /*
 Plugin Name: WooCommerce Wishlist
 Description: Simple wishlist functionality for WooCommerce without user registration.
-Version: 1.0
+Version: 1.1
 Author: Ali Ozgenc
 */
-
 
 // Admin Tab
 function wishlist_custom_admin_tab()
@@ -41,15 +40,20 @@ function add_to_wishlist()
 
     if ($product_id > 0) {
         // Wishlist data
-        $wishlist = isset($_COOKIE['wishlist']) ? json_decode($_COOKIE['wishlist'], true) : array();
+        $wishlist = isset($_COOKIE['wishlist']) ? json_decode(stripslashes($_COOKIE['wishlist']), true) : array();
 
-        // Add product to wishlist
-        if (!in_array($product_id, $wishlist)) {
+        // Check if product is already in wishlist
+        $index = array_search($product_id, $wishlist);
+
+        // If product is in wishlist, remove it; otherwise, add it
+        if ($index !== false) {
+            unset($wishlist[$index]);
+        } else {
             $wishlist[] = $product_id;
         }
 
-        // Save wishlist data cookies
-        setcookie('wishlist', json_encode($wishlist), time() + 3600, '/');
+        // Save wishlist data to localStorage
+        setcookie('wishlist', json_encode($wishlist), time() + 3600 * 24 * 30, '/'); // 30 days expiration
 
         // AJAX response
         echo json_encode(array('success' => true));
@@ -60,23 +64,28 @@ function add_to_wishlist()
 
     wp_die();
 }
+
 add_action('wp_ajax_add_to_wishlist', 'add_to_wishlist');
 add_action('wp_ajax_nopriv_add_to_wishlist', 'add_to_wishlist');
-
 
 // Show wishlist page
 function show_custom_wishlist()
 {
     // Wishlist verilerini çek
-    $wishlist = isset($_COOKIE['wishlist']) ? json_decode($_COOKIE['wishlist'], true) : array();
+    $wishlist = isset($_COOKIE['wishlist']) ? json_decode(stripslashes($_COOKIE['wishlist']), true) : array();
 
     // Wishlist Page content
     $output = '<h2>Custom Wishlist</h2>';
     $output .= '<ul>';
-    foreach ($wishlist as $product_id) {
-        $product = wc_get_product($product_id);
-        $output .= '<li><a href="' . get_permalink($product_id) . '">' . $product->get_name() . '</a></li>';
+
+    // Check if $wishlist is an array before using foreach
+    if (is_array($wishlist)) {
+        foreach ($wishlist as $product_id) {
+            $product = wc_get_product($product_id);
+            $output .= '<li><a href="' . get_permalink($product_id) . '">' . $product->get_name() . '</a></li>';
+        }
     }
+
     $output .= '</ul>';
 
     return $output;
@@ -91,16 +100,37 @@ function add_wishlist_button_to_product()
     global $product;
 
     // get Wishlist
-    $wishlist = isset($_COOKIE['wishlist']) ? json_decode($_COOKIE['wishlist'], true) : array();
+    $wishlist = isset($_COOKIE['wishlist']) ? json_decode(stripslashes($_COOKIE['wishlist']), true) : array();
+
+    // Check if the product is in the wishlist
+    $isProductInWishlist = in_array($product->get_id(), $wishlist ?? array());
 
     // Add wishlist button 
-    echo '<a href="#" class="add-to-wishlist" data-product-id="' . $product->get_id() . '">Add to Wishlist</a>';
+    echo '<a href="#" class="add-to-wishlist" data-product-id="' . $product->get_id() . '" data-nonce="' . wp_create_nonce('add_to_wishlist_nonce') . '"><span class="heart-icon ' . ($isProductInWishlist ? 'active' : '') . '"></span> Add to Wishlist</a>';
 }
+
 add_action('woocommerce_after_shop_loop_item', 'add_wishlist_button_to_product', 15);
 
+// Add Wishlist script
 function add_wishlist_script()
 {
 ?>
+    <style>
+        /* Kalp ikonu */
+        .heart-icon {
+            width: 20px;
+            height: 20px;
+            background-image: url('https://countryclassic.co.uk/wp-content/uploads/2023/11/heart.png');
+            background-size: cover;
+            display: inline-block;
+        }
+
+        /* Kalp ikonu - Kırmızı */
+        .heart-icon.active {
+            background-image: url('https://countryclassic.co.uk/wp-content/uploads/2023/11/heart_red.png');
+        }
+    </style>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var wishlistButtons = document.querySelectorAll('.add-to-wishlist');
@@ -110,10 +140,14 @@ function add_wishlist_script()
                     e.preventDefault();
 
                     var productId = this.getAttribute('data-product-id');
+                    var heartIcon = this.querySelector('.heart-icon');
+                    var nonce = this.getAttribute('data-nonce');
+
+                    // Check if the product is in the wishlist
+                    var isProductInWishlist = heartIcon.classList.contains('active');
 
                     // AJAX request
                     var xhr = new XMLHttpRequest();
-
 
                     xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
 
@@ -121,12 +155,14 @@ function add_wishlist_script()
                     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
 
                     // AJAX data
-                    var data = 'action=add_to_wishlist&product_id=' + encodeURIComponent(productId);
+                    var data = 'action=add_to_wishlist&product_id=' + encodeURIComponent(productId) + '&nonce=' + encodeURIComponent(nonce);
 
                     // Make request
                     xhr.onreadystatechange = function() {
                         if (xhr.readyState === 4) {
                             if (xhr.status === 200) {
+                                // Change heart color when product is added to or removed from wishlist
+                                heartIcon.classList.toggle('active');
                                 console.log('Product added to wishlist!');
                             } else {
                                 console.error('AJAX request failed:', xhr.statusText);
@@ -140,4 +176,5 @@ function add_wishlist_script()
     </script>
 <?php
 }
+
 add_action('wp_footer', 'add_wishlist_script');
