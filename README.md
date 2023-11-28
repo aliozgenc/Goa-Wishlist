@@ -15,7 +15,7 @@ In the future I'm planning to make these changes:
 - Make a proper file structure so the plugin will be more readable for developers.
 - Plugin will be able to remember for your wishlist forever (or till you delete them, lol) as soon as you become a registered customer.
 
-<b>Install:</b>
+<b>Install:</b> <br>
 Simply put in /plugins directory and unzip. <br>
 Requires WooCommerce.
 
