@@ -2,7 +2,7 @@
 /*
 Plugin Name: WooCommerce Wishlist
 Description: Simple wishlist functionality for WooCommerce without user registration.
-Version: 1.1
+Version: 2.0
 Author: Ali Ozgenc
 */
 
@@ -34,9 +34,9 @@ function wishlist_custom_admin_page_content()
 add_action('admin_menu', 'wishlist_custom_admin_tab');
 
 // AJAX func for wishlist
-function add_to_wishlist()
+function wishlist_custom_ajax_handler($data)
 {
-    $product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
+    $product_id = isset($data['product_id']) ? intval($data['product_id']) : 0;
 
     if ($product_id > 0) {
         // Wishlist data
@@ -56,17 +56,23 @@ function add_to_wishlist()
         setcookie('wishlist', json_encode($wishlist), time() + 3600 * 24 * 30, '/'); // 30 days expiration
 
         // AJAX response
-        echo json_encode(array('success' => true));
+        return json_encode(array('success' => true));
     } else {
         // If error
-        echo json_encode(array('error' => 'Invalid product ID'));
+        return json_encode(array('error' => 'Invalid product ID'));
     }
-
-    wp_die();
 }
 
-add_action('wp_ajax_add_to_wishlist', 'add_to_wishlist');
-add_action('wp_ajax_nopriv_add_to_wishlist', 'add_to_wishlist');
+add_action('rest_api_init', 'wishlist_custom_rest_api_endpoint');
+
+function wishlist_custom_rest_api_endpoint()
+{
+    register_rest_route('wishlist/v1', '/add', array(
+        'methods' => 'POST',
+        'callback' => 'wishlist_custom_ajax_handler',
+        'permission_callback' => '__return_true',
+    ));
+}
 
 // Show wishlist page
 function show_custom_wishlist()
@@ -98,6 +104,11 @@ add_shortcode('custom_wishlist', 'show_custom_wishlist');
 function add_wishlist_button_to_product()
 {
     global $product;
+
+    // Check if $product is a valid product object
+    if (!is_a($product, 'WC_Product')) {
+        return;
+    }
 
     // get Wishlist
     $wishlist = isset($_COOKIE['wishlist']) ? json_decode(stripslashes($_COOKIE['wishlist']), true) : array();
@@ -149,13 +160,13 @@ function add_wishlist_script()
                     // AJAX request
                     var xhr = new XMLHttpRequest();
 
-                    xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+                    xhr.open('POST', '<?php echo esc_url_raw(rest_url('wishlist/v1/add')); ?>', true);
 
                     // Other AJAX settings
                     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
 
                     // AJAX data
-                    var data = 'action=add_to_wishlist&product_id=' + encodeURIComponent(productId) + '&nonce=' + encodeURIComponent(nonce);
+                    var data = 'product_id=' + encodeURIComponent(productId) + '&nonce=' + encodeURIComponent(nonce);
 
                     // Make request
                     xhr.onreadystatechange = function() {
